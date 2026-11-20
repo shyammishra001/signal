@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><script src="https://unpkg.com/streamlit-component-lib@1.4.0/dist/index.js"></script></head>
+<body>
+<script>
+const KEY = "shyam_ai_indstocks_token_v1";
+function send(value) {
+  Streamlit.setComponentValue(value);
+}
+function readVault() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return {token:"", expires_at:0};
+    const data = JSON.parse(raw);
+    if (!data.token || !data.expires_at || Date.now()/1000 >= data.expires_at) {
+      localStorage.removeItem(KEY);
+      return {token:"", expires_at:0};
+    }
+    return data;
+  } catch (e) {
+    return {token:"", expires_at:0};
+  }
+}
+function onRender(event) {
+  const args = event.detail.args || {};
+  if (args.clear_token) {
+    localStorage.removeItem(KEY);
+    send({token:"", expires_at:0});
+    Streamlit.setFrameHeight(1);
+    return;
+  }
+  if (args.save_token) {
+    const data = {token:String(args.save_token), expires_at:Math.floor(Date.now()/1000)+86400};
+    localStorage.setItem(KEY, JSON.stringify(data));
+    send(data);
+    Streamlit.setFrameHeight(1);
+    return;
+  }
+  send(readVault());
+  Streamlit.setFrameHeight(1);
+}
+Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
+Streamlit.setComponentReady();
+Streamlit.setFrameHeight(1);
+</script>
+</body>
+</html>

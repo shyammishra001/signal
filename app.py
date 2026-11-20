@@ -1252,10 +1252,10 @@ with st.expander("📋 Matched NSE F&O Stocks — Clean View", expanded=False):
     # Keep those identifiers only in the in-memory API universe and downloadable raw CSV.
     clean_ranked = ranked.copy()
     if "DIRECTION" in clean_ranked.columns:
-        clean_ranked["Direction"] = clean_ranked["DIRECTION"].map({"UP":"🟢 UP", "DOWN":"🔻 DOWN"}).fillna("⚪ FLAT")
+        clean_ranked["Direction"] = clean_ranked["DIRECTION"].map({"UP":"▲", "DOWN":"🔻"}).fillna("⚪ FLAT")
     elif "DAY_%" in clean_ranked.columns:
         day = pd.to_numeric(clean_ranked["DAY_%"], errors="coerce").fillna(0)
-        clean_ranked["Direction"] = day.map(lambda x: "🟢 UP" if x > 0.001 else ("🔻 DOWN" if x < -0.001 else "⚪ FLAT"))
+        clean_ranked["Direction"] = day.map(lambda x: "▲" if x > 0.001 else ("🔻 DOWN" if x < -0.001 else "⚪ FLAT"))
     preferred_cols = ["SYMBOL", "LTP", "DAY_%", "Direction", "VOLUME", "OPEN", "HIGH", "LOW", "PREV_CLOSE", "MOM_1M_%", "MOM_3M_%", "MOM_5M_%", "SIGNAL"]
     display_cols = [c for c in preferred_cols if c in clean_ranked.columns]
     clean_ranked = clean_ranked[display_cols].rename(columns={"SYMBOL":"Stock", "DAY_%":"Day %", "VOLUME":"Volume", "OPEN":"Open", "HIGH":"High", "LOW":"Low", "PREV_CLOSE":"Prev Close", "MOM_1M_%":"1m %", "MOM_3M_%":"3m %", "MOM_5M_%":"5m %"})

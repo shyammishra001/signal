@@ -80,6 +80,7 @@ Designed for access through a web browser on:
 - Android
 - iPhone
 - Tablets
+- Every Where
 
 ---
 

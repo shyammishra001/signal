@@ -3,7 +3,7 @@
 <head><meta charset="utf-8">
 <script>
   function loadStreamlitLib(onReady) {
-    if (window.Streamlit) { onReady(); return; }
+    if (window.Streamlit && window.Streamlit.events) { onReady(); return; }
     var s1 = document.createElement('script');
     s1.src = 'https://unpkg.com/streamlit-component-lib@1.4.0/dist/index.js';
     s1.onload = function(){ onReady(); };
@@ -11,7 +11,7 @@
       var s2 = document.createElement('script');
       s2.src = 'https://cdn.jsdelivr.net/npm/streamlit-component-lib@1.4.0/dist/index.js';
       s2.onload = function(){ onReady(); };
-      s2.onerror = function(){ console.error('Streamlit lib dono CDN se fail'); };
+      s2.onerror = function(){ setTimeout(function(){ loadStreamlitLib(onReady); }, 500); };
       document.head.appendChild(s2);
     };
     document.head.appendChild(s1);
@@ -20,71 +20,66 @@
 </head>
 <body>
 <script>
-const KEY = "shyam_ai_indstocks_token_v1";
-let lastSent = "";
+var KEY = "shyam_ai_indstocks_token_v1";
+var memoryToken = null;
 
-function send(value) {
+function safeGet() {
   try {
-    var json = JSON.stringify(value || {token:"", expires_at:0});
-    if (json === lastSent) return;
-    lastSent = json;
-    Streamlit.setComponentValue(value);
-  } catch(e) { console.error("send fail", e); }
+    var raw = localStorage.getItem(KEY);
+    if (raw) { var d = JSON.parse(raw); if (d.token && d.expires_at && Date.now()/1000 < d.expires_at) return d; }
+  } catch(e) {}
+  try {
+    var raw2 = sessionStorage.getItem(KEY);
+    if (raw2) { var d2 = JSON.parse(raw2); if (d2.token && d2.expires_at && Date.now()/1000 < d2.expires_at) return d2; }
+  } catch(e) {}
+  if (memoryToken && memoryToken.expires_at && Date.now()/1000 < memoryToken.expires_at) return memoryToken;
+  return {token:"", expires_at:0};
 }
 
-function readVault() {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return {token:"", expires_at:0};
-    const data = JSON.parse(raw);
-    if (!data.token || !data.expires_at || Date.now()/1000 >= data.expires_at) {
-      try { localStorage.removeItem(KEY); } catch(e) {}
-      return {token:"", expires_at:0};
-    }
-    return data;
-  } catch (e) {
-    console.warn("localStorage read block/fail:", e);
-    return {token:"", expires_at:0};
-  }
+function safeSave(data) {
+  memoryToken = data;
+  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch(e) { console.warn("localStorage save block:", e); }
+  try { sessionStorage.setItem(KEY, JSON.stringify(data)); } catch(e) {}
+}
+
+function safeClear() {
+  memoryToken = null;
+  try { localStorage.removeItem(KEY); } catch(e) {}
+  try { sessionStorage.removeItem(KEY); } catch(e) {}
+}
+
+function send(value) {
+  try { Streamlit.setComponentValue(value || {token:"", expires_at:0}); } catch(e) { console.error("send fail", e); }
 }
 
 function onRender(event) {
   try {
-    const args = (event && event.detail && event.detail.args) || {};
+    var args = (event && event.detail && event.detail.args) || {};
     if (args.clear_token === true) {
-      try { localStorage.removeItem(KEY); } catch(e) {}
-      lastSent = "";
+      safeClear();
       send({token:"", expires_at:0});
-      Streamlit.setFrameHeight(1);
+      try { Streamlit.setFrameHeight(1); } catch(e) {}
       return;
     }
     if (args.save_token && String(args.save_token).trim() !== "") {
-      const data = {token:String(args.save_token), expires_at:Math.floor(Date.now()/1000)+86400};
-      try {
-        localStorage.setItem(KEY, JSON.stringify(data));
-        console.log("Token computer me save ho gaya");
-      } catch(e) {
-        console.error("localStorage save BLOCK hua:", e);
-      }
-      lastSent = "";
+      var data = {token: String(args.save_token).trim(), expires_at: Math.floor(Date.now()/1000) + 86400};
+      safeSave(data);
       send(data);
-      Streamlit.setFrameHeight(1);
+      try { Streamlit.setFrameHeight(1); } catch(e) {}
       return;
     }
-    send(readVault());
-    Streamlit.setFrameHeight(1);
+    send(safeGet());
+    try { Streamlit.setFrameHeight(1); } catch(e) {}
   } catch(e) { console.error("onRender fail", e); }
 }
 
 function start() {
-  if (!window.Streamlit || !window.Streamlit.events) {
-    setTimeout(start, 100);
-    return;
-  }
+  if (!window.Streamlit || !window.Streamlit.events) { setTimeout(start, 100); return; }
   Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
   Streamlit.setComponentReady();
   Streamlit.setFrameHeight(1);
-  setTimeout(function(){ send(readVault()); }, 200);
+  setTimeout(function(){ send(safeGet()); }, 100);
+  setTimeout(function(){ send(safeGet()); }, 600);
 }
 loadStreamlitLib(start);
 </script>

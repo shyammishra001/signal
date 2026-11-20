@@ -741,7 +741,9 @@ def render_chain(chain, symbol, expiry, fno_rows=None, contracts=None):
     e.metric("Max PE OI", str(max_pe) if max_pe is not None else "—")
     st.caption(f"{symbol} • Expiry: {response_expiry or expiry} • CE = GREEN (Call) • PE = RED (Put) • ATM strike highlighted in yellow")
 
-    # CE and PE columns stay side-coloured; STRIKE remains neutral in the centre.
+    # Colour only the in-the-money side (plus ATM):
+    # CE is ITM when strike < spot; PE is ITM when strike > spot.
+    # OTM cells remain transparent/default so the table is not fully painted.
     primary_cols = [
         "CE OI", "CE OI Change", "CE Volume", "CE LTP", "CE Lot Size", "CE One-Lot Buy ₹", "STRIKE",
         "PE One-Lot Buy ₹", "PE Lot Size", "PE LTP", "PE Volume", "PE OI Change", "PE OI",
@@ -754,14 +756,18 @@ def render_chain(chain, symbol, expiry, fno_rows=None, contracts=None):
     def side_color_style(row):
         styles = [""] * len(row)
         strike = safe_float(row.get("STRIKE"))
+        is_atm = (atm_strike is not None and strike is not None
+                  and abs(strike - safe_float(atm_strike)) < 1e-9)
+        is_ce_itm = (spot is not None and strike is not None and strike < float(spot))
+        is_pe_itm = (spot is not None and strike is not None and strike > float(spot))
         for idx, col in enumerate(view.columns):
-            if col in ce_cols:
-                styles[idx] = "background-color:#123d2a;color:#d5ffe2;"
-            elif col in pe_cols:
-                styles[idx] = "background-color:#4a171c;color:#ffdadd;"
+            if col in ce_cols and (is_ce_itm or is_atm):
+                styles[idx] = "background-color:#145c3b;color:#e3ffed;font-weight:600;"
+            elif col in pe_cols and (is_pe_itm or is_atm):
+                styles[idx] = "background-color:#7a202b;color:#ffe8ea;font-weight:600;"
             elif col == "STRIKE":
                 styles[idx] = "background-color:#242424;color:#ffffff;font-weight:800;border-left:2px solid #e0b341;border-right:2px solid #e0b341;"
-        if atm_strike is not None and strike == safe_float(atm_strike):
+        if is_atm:
             for idx in range(len(styles)):
                 styles[idx] += "border-top:2px solid #f4c542;border-bottom:2px solid #f4c542;"
             if "STRIKE" in view.columns:
@@ -770,7 +776,7 @@ def render_chain(chain, symbol, expiry, fno_rows=None, contracts=None):
 
     styled = view.style.apply(side_color_style, axis=1).format(precision=2, na_rep="—")
     st.dataframe(styled, use_container_width=True, hide_index=True, height=570)
-    st.caption("🟢 CE की सभी कॉलम हरे • 🔴 PE की सभी कॉलम लाल • Lot Size = एक lot में units • One-Lot Buy ₹ = LTP × Lot Size (लगभग प्रीमियम लागत) • पीली लाइन = ATM.")
+    st.caption("🟢 केवल ITM CE और ATM CE कॉलम हरे • 🔴 केवल ITM PE और ATM PE कॉलम लाल • OTM कॉलम सामान्य/transparent • Lot Size = एक lot में units • One-Lot Buy ₹ = LTP × Lot Size • पीली लाइन = ATM.")
     with st.expander("⚙️ Advanced Option Greeks, Theta & Bid/Ask (optional)", expanded=False):
         if atm_index is not None:
             atm_row_data = frame.loc[atm_index]
@@ -1040,9 +1046,12 @@ st.caption("Rising और Falling के leaders की तुलना 1m/3m/5m
 side_candidates = [c for c in (rise_candidate, fall_candidate) if c is not None]
 if side_candidates:
     cand_cols = st.columns(2)
-    for col, label, candidate in zip(cand_cols, ["🟢 Rising leader", "🔻 Falling leader"], [rise_candidate, fall_candidate]):
+    for col, label, candidate in zip(cand_cols, ["Rising leader", "🔻 Falling leader"], [rise_candidate, fall_candidate]):
         with col:
-            st.subheader(label)
+            if label == "Rising leader":
+                st.markdown("<div style='font-size:1.35rem;font-weight:750;color:#198754;margin:0 0 .45rem 0;'>▲ Rising leader</div>", unsafe_allow_html=True)
+            else:
+                st.subheader(label)
             if candidate:
                 day_value = candidate.get("day")
                 day_value = 0.0 if day_value is None else day_value
@@ -1092,20 +1101,26 @@ else:
 st.divider()
 st.header("🔎 Stock / Option Score Search — आपका 0–100 Logic")
 st.caption("किसी NSE F&O stock का नाम या पूरा option trading symbol लिखें। Stock का scanner score और option का अलग contract-quality score दिखेगा। Option score, stock score की जगह नहीं लेता।")
-search_query = st.text_input("Stock या Option Symbol खोजें", placeholder="उदा. RELIANCE, BHEL या RELIANCE-...", key="score_lookup_query").strip().upper()
-# Live prefix/substring suggestions from the downloaded NSE F&O master.
+# One native searchable dropdown: type a few letters (REL, HDF, etc.) and select
+# the matching stock or OPTSTK contract. No second "Matching stock" box.
 search_symbols, has_static_master = load_static_fno_symbols(universe)
-st.caption("Autocomplete: GitHub static stock master + live API के नए symbols." if has_static_master else "Autocomplete: अभी live API symbols; GitHub static CSV जोड़ने पर नाम पहले से उपलब्ध रहेंगे.")
-suggestion_matches = ([x for x in search_symbols if search_query in x][:20] if search_query else [])
-if search_query and suggestion_matches:
-    st.caption("मिलते-जुलते NSE F&O stocks — नीचे से चुनें:")
-    chosen_suggestion = st.selectbox("Matching stock", ["— टाइप किया हुआ नाम रखें —"] + suggestion_matches,
-                                     key="score_lookup_suggestion")
-    if chosen_suggestion != "— टाइप किया हुआ नाम रखें —":
-        st.caption(f"चुना गया ticker: **{chosen_suggestion}**")
-        search_query = chosen_suggestion
-elif search_query:
-    st.info("इस text से कोई NSE stock-F&O ticker match नहीं मिला। पूरा option trading symbol भी खोज सकते हैं।")
+contract_master = normalize_cols(fno_master)
+contract_symbols = []
+if {"EXCH", "INSTRUMENT_NAME", "TRADING_SYMBOL"}.issubset(contract_master.columns):
+    opt_rows = contract_master[
+        contract_master["EXCH"].astype(str).str.upper().eq("NSE") &
+        contract_master["INSTRUMENT_NAME"].astype(str).str.upper().eq("OPTSTK")
+    ]
+    contract_symbols = opt_rows["TRADING_SYMBOL"].dropna().astype(str).str.upper().unique().tolist()
+search_choices = sorted(set(search_symbols + contract_symbols))
+st.caption("GitHub में सेव static F&O master से नाम तुरंत मिलेंगे; चुने गए symbol का live score/contract data API से आएगा." if has_static_master else "F&O master से stock और option symbols खोजें; live data API से आएगा.")
+search_query = st.selectbox(
+    "Stock / Option Symbol खोजें — कुछ अक्षर टाइप करें",
+    options=[""] + search_choices,
+    index=0,
+    placeholder="REL लिखें और RELIANCE चुनें…",
+    key="score_lookup_single_search"
+).strip().upper()
 if st.button("🔍 Analyse Search", key="run_score_lookup", type="primary"):
     st.session_state.pop("score_lookup_result", None)
     if not search_query:
@@ -1247,32 +1262,6 @@ with st.expander("📋 Matched NSE F&O Stocks — Clean View", expanded=False):
     st.dataframe(clean_ranked, use_container_width=True, hide_index=True, height=420)
 with st.expander("🧰 Advanced diagnostics (technical details)", expanded=False):
     st.json(diagnostics)
-
-# Downloadable static stock-name master; live prices/contracts remain API-driven.
-st.subheader("📥 NSE F&O Master Data Download")
-d1, d2 = st.columns(2)
-with d1:
-    stock_master_csv = universe[["SYMBOL", "SECURITY_ID", "CASH_TRADING_SYMBOL", "SCRIP_CODE"]].to_csv(index=False).encode("utf-8-sig")
-    st.download_button("⬇️ F&O Stock List (CSV)", stock_master_csv,
-                       file_name="nse_fno_stock_universe.csv", mime="text/csv",
-                       help="वर्तमान API master से matched NSE stock-F&O symbols की सूची।")
-with d2:
-    opt_master_download = normalize_cols(fno_master)
-    opt_master_download = opt_master_download[
-        opt_master_download.get("EXCH", pd.Series("", index=opt_master_download.index)).astype(str).str.upper().eq("NSE") &
-        opt_master_download.get("INSTRUMENT_NAME", pd.Series("", index=opt_master_download.index)).astype(str).str.upper().eq("OPTSTK")
-    ].copy()
-    opt_master_csv = opt_master_download.to_csv(index=False).encode("utf-8-sig")
-    st.download_button("⬇️ Full OPTSTK Contract Master (CSV)", opt_master_csv,
-                       file_name="nse_optstk_contract_master.csv", mime="text/csv",
-                       help="वर्तमान API master में उपलब्ध NSE stock-option contracts।")
-st.caption("Static stock master को एक बार डाउनलोड करके GitHub में app.py के साथ root folder में रखें। App इसे autocomplete के लिए पढ़ेगा; quotes, OI, expiry और option-chain डेटा live INDstocks API से ही आएगा।")
-static_cols = [c for c in ["SYMBOL", "SECURITY_ID", "CASH_TRADING_SYMBOL", "SCRIP_CODE"] if c in universe.columns]
-static_stock_master = universe[static_cols].drop_duplicates("SYMBOL").sort_values("SYMBOL")
-st.download_button("⬇️ GitHub Static F&O Stock Name Master (CSV)", static_stock_master.to_csv(index=False).encode("utf-8-sig"),
-                   file_name="nse_fno_stock_master.csv", mime="text/csv",
-                   help="इसे एक बार डाउनलोड करके GitHub repository के root में app.py के साथ upload करें।")
-st.caption("नए F&O stocks आने पर master CSV दोबारा डाउनलोड करके GitHub में replace करें। Static file केवल नाम/autocomplete के लिए है; live market data हमेशा API से आएगा।")
 
 st.divider()
 st.header("📊 Professional Option Chain — CE / Strike / PE")

@@ -861,6 +861,18 @@ status_text = st.session_state.get("scan_snapshot_status", "LIVE / UPDATED")
 if status_text != "LIVE / UPDATED":
     st.warning(status_text + " • नया quote snapshot directional नहीं था; नीचे पिछली valid सूची दिखाई जा रही है।")
 
+def score_heat_style(value, high_color):
+    """Low score is red for Rising and green for Falling; high score reverses."""
+    score = safe_float(value)
+    if score is None:
+        return ""
+    score = max(0.0, min(100.0, score)) / 100.0
+    low = (220, 65, 65) if high_color == "green" else (35, 155, 85)
+    high = (25, 145, 75) if high_color == "green" else (190, 45, 55)
+    rgb = tuple(round(low[i] + (high[i] - low[i]) * score) for i in range(3))
+    return f"background-color: rgb{rgb}; color: #ffffff; font-weight: 800;"
+
+
 left, right = st.columns(2)
 compact_cols = ["SYMBOL", "LTP", "DAY_%", "MOM_1M_%", "MOM_3M_%", "MOM_5M_%", "UP_SCORE"]
 with left:
@@ -869,15 +881,18 @@ with left:
     if view.empty:
         st.dataframe(pd.DataFrame({"Status":["No rising stock in current valid snapshot"]}), use_container_width=True, hide_index=True)
     else:
-        st.dataframe(view.style.format(precision=2, na_rep="—"), use_container_width=True, hide_index=True, height=390)
+        styled_up = view.style.applymap(lambda v: score_heat_style(v, "green"), subset=["Score /100"]).format(precision=2, na_rep="—")
+        st.dataframe(styled_up, use_container_width=True, hide_index=True, height=390)
 with right:
     st.subheader("🔴 Fastest Falling F&O Stocks — Top 10")
     view = down[["SYMBOL", "LTP", "DAY_%", "MOM_1M_%", "MOM_3M_%", "MOM_5M_%", "DOWN_SCORE"]].rename(columns={"SYMBOL":"Stock", "DAY_%":"Day %", "MOM_1M_%":"1m %", "MOM_3M_%":"3m %", "MOM_5M_%":"5m %", "DOWN_SCORE":"Score /100"})
     if view.empty:
         st.dataframe(pd.DataFrame({"Status":["No falling stock in current valid snapshot"]}), use_container_width=True, hide_index=True, height=390)
     else:
-        st.dataframe(view.style.format(precision=2, na_rep="—"), use_container_width=True, hide_index=True, height=390)
+        styled_down = view.style.applymap(lambda v: score_heat_style(v, "red"), subset=["Score /100"]).format(precision=2, na_rep="—")
+        st.dataframe(styled_down, use_container_width=True, hide_index=True, height=390)
 
+st.caption("Score heatmap: Rising में 100 के करीब गहरा हरा, कम score लाल; Falling में 100 के करीब गहरा लाल, कम score हरा.")
 st.caption(f"Last valid scan: {st.session_state.get('last_scan', '—')} • Usable quotes: {st.session_state.get('quote_count', 0)} / {len(scan_universe)} • Latest API quotes: {st.session_state.get('latest_quote_count', st.session_state.get('quote_count', 0))} • Ranking is relative, not a win probability.")
 
 
@@ -1003,7 +1018,20 @@ if side_candidates:
         with col:
             st.subheader(label)
             if candidate:
-                st.metric(candidate["symbol"], f"{candidate['score']:.1f} / 100", delta=f"{candidate['direction']} • Day {candidate['day'] if candidate['day'] is not None else 0:.2f}%")
+                day_value = candidate.get("day")
+                day_value = 0.0 if day_value is None else day_value
+                # Do not use st.metric(delta=...) here: Streamlit's built-in
+                # delta arrow/color can visually conflict with the leader direction.
+                # Render an explicit direction-colored line instead.
+                is_down = candidate["direction"] == "DOWN"
+                arrow = "▼" if is_down else "▲"
+                tone = "#dc3545" if is_down else "#198754"
+                st.metric(candidate["symbol"], f"{candidate['score']:.1f} / 100")
+                st.markdown(
+                    f"<div style='color:{tone};font-weight:700;font-size:0.95rem;'>"
+                    f"{arrow} {candidate['direction']} • Day {day_value:+.2f}%</div>",
+                    unsafe_allow_html=True
+                )
                 st.caption(f"1m: {candidate['m1'] if candidate['m1'] is not None else 'collecting'}% • 3m: {candidate['m3'] if candidate['m3'] is not None else 'collecting'}% • 5m: {candidate['m5'] if candidate['m5'] is not None else 'collecting'}% • OI: {candidate['oi'] or 'not confirmed'}")
                 hctx = candidate.get("history") or {}
                 if hctx.get("available"):
@@ -1022,7 +1050,8 @@ if side_candidates:
     trade_ready = bool(final_pick["aligned"] and final_pick["score"] >= 45 and not shock_block)
     st.session_state["intelligent_pick"] = {**final_pick, "trade_ready": trade_ready}
     if trade_ready:
-        st.success(f"🏆 आज का एक Final Candidate: {final_pick['symbol']} — {'BUY CE setup' if final_pick['direction']=='UP' else 'BUY PE setup'} • Adaptive score {final_pick['score']:.1f}/100")
+        final_arrow = "🟢 ▲" if final_pick["direction"] == "UP" else "🔻"
+        st.success(f"🏆 आज का एक Final Candidate: {final_arrow} {final_pick['symbol']} — {'BUY CE setup' if final_pick['direction']=='UP' else 'BUY PE setup'} • Adaptive score {final_pick['score']:.1f}/100")
         st.write("कारण: उपलब्ध 1m/3m/5m windows में कम-से-कम दो एक दिशा में confirm हैं; Futures OI confirmation score में शामिल है। Option contract ₹10,000 budget, lot size, liquidity, spread और Greeks जाँचने के बाद ही shortlist होगा।")
     else:
         st.warning(f"एक provisional leader: {final_pick['symbol']} ({'CE side' if final_pick['direction']=='UP' else 'PE side'}) — अभी WAIT / NO TRADE. 1m/3m/5m में कम-से-कम दो-window confirmation या minimum score पूरा नहीं है।")

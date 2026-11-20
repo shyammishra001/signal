@@ -1,0 +1,21 @@
+SHYAM AI V2.2 — RESEARCH / METHOD NOTES
+========================================
+
+This build borrows ideas, not copied implementation, from:
+- Jake Schincariol's Day Trader Skill (MIT): historical setup replay and a Monte Carlo "Time Machine".
+- India Trader Skill: Indian-market adaptation, costs-aware testing, breadth/sample-size caution and honest reporting.
+
+The India Trader Skill repository reports that many short-window intraday rules lost after charges and that its follow-up stock/options experiments did not pass all validation checks. This is a useful warning against treating a high win rate or a 1-month result as proof of edge.
+
+What this app now does:
+- Stock-only daily proxy with next-open entry, ATR stop, 2R target, risk-based quantity, and conservative stop-first handling when daily OHLC touches both stop and target.
+- A 10,000-path bootstrap of the strategy's observed daily portfolio returns, plus transaction-cost sensitivity.
+- Live option-chain analytics, including bid/ask spread and theta per lot/day where lot size is available.
+
+What it does NOT claim:
+- The daily stock proxy is not an options strategy backtest.
+- Bootstrap paths are not a price forecast and cannot create an edge that is absent in the sample.
+- No option theta/IV/spread P&L is fabricated. A real option backtest needs historical OHLCV for the exact option contract and entry/exit timestamps. INDstocks documents a separate expired-F&O historical candle endpoint; this can be integrated as a dedicated next-stage module.
+- A one-month window is too small to establish statistical significance or robustness.
+
+Keep the app read-only. Do not put broker tokens in source files or public repositories.

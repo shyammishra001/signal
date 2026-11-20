@@ -1,0 +1,21 @@
+SHYAM AI F&O EXPLOSION SCANNER V2.5 — Ubuntu Update
+
+इस अपडेट में:
+1) Streamlit secrets.toml पर निर्भरता हटा दी गई है। Local Ubuntu run के लिए secrets.toml आवश्यक नहीं है। Optional app password केवल APP_PASSWORD environment variable से लिया जाएगा। INDstocks access token ऐप के sidebar में session के दौरान भरें।
+2) Intelligent Adaptive Pick के Rising और Falling leaders के लिए INDstocks Historical Data API का 1day OHLCV data लिया जाता है (लगभग पिछले 45 calendar days, उपलब्ध sessions के आधार पर)।
+3) Recent 20 sessions से median absolute daily move, worst daily return, peak-to-trough drawdown और आज के move का typical move से multiple निकाला जाता है।
+4) यदि आज का move historical range से बहुत बड़ा हो (HIGH/EXTREME shock), तो बिना 1m/3m/5m confirmation के उस दिशा को chase करने पर score घटता है और WAIT guard दिखता है। यह बड़ा move अपने-आप reversal या continuation नहीं माना जाता।
+5) F&O universe breadth से संकेत मिलता है कि गिरावट व्यापक है या सीमित stocks में है। यह केवल breadth proxy है, पूर्ण sector/news attribution नहीं।
+
+महत्वपूर्ण सीमाएँ:
+- OHLCV इतिहास move का आकार बताता है, उसका कारण नहीं। कंपनी announcement, exchange filing और विश्वसनीय news की अलग पुष्टि आवश्यक है। ऐप कारण का अनुमान लगाकर तथ्य की तरह नहीं दिखाता।
+- Historical API failure/कम data पर historical adjustment लागू नहीं होगा और स्क्रीन पर साफ लिखा जाएगा।
+- कोई score या pick लाभ की गारंटी नहीं है। ₹10,000 option budget और live liquidity/Greeks की जाँच अलग से जरूरी है।
+- App READ-ONLY है; कोई order place नहीं करता।
+
+Ubuntu:
+पुराने project folder में नया ZIP extract करके files replace करें। .venv को हटाने की जरूरत नहीं है। Terminal में:
+  chmod +x RUN_UBUNTU.sh
+  ./RUN_UBUNTU.sh
+
+यह build Streamlit secrets.toml न मिलने पर crash नहीं होना चाहिए।

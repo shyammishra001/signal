@@ -1,0 +1,14 @@
+SHYAM AI F&O EXPLOSION SCANNER V2.5 — INTELLIGENT SEARCH UPDATE
+
+इस build में किए गए बदलाव:
+1. Momentum scoring और Intelligent Adaptive Pick में 1m, 3m और 5m तीनों windows शामिल हैं। उपलब्ध windows में कम-से-कम दो एक दिशा में हों तो confirmation माना जाता है।
+2. Rising/Falling Top 10 tables में 5m % भी दिखता है।
+3. नया Stock / Option Score Search जोड़ा गया है। NSE F&O stock ticker लिखने पर उसी scanner के UP/DOWN 0–100 score, Day %, LTP और 1m/3m/5m readings दिखेंगी।
+4. पूरा OPTSTK trading symbol लिखने पर exact underlying/expiry का option chain खोजा जाएगा और option contract-quality score /100 निकलेगा। यह score delta suitability, volume/OI liquidity, bid-ask spread और theta burden पर आधारित है; stock score से अलग है।
+5. Ubuntu RUN_UBUNTU.sh अब requirements hash और Python version marker रखता है। Packages पहली बार या requirements/runtime बदलने पर ही install होंगे; हर बार dashboard start पर pip install नहीं चलेगा।
+6. App अभी भी READ-ONLY है; कोई order place नहीं करता। ₹10,000 budget fit को अलग से दिखाया जाता है।
+
+महत्वपूर्ण:
+- 1m/3m/5m movement snapshot history से बनता है। ऐप लगातार चलने के बाद ही पूरे windows उपलब्ध होंगे।
+- Option search को live API access, valid OPTSTK contract, matching expiry और option-chain response चाहिए।
+- Stock score ranking/logic match है, profit probability या guaranteed trade signal नहीं। Option score contract quality है, buy recommendation नहीं।

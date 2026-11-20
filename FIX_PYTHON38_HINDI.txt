@@ -1,0 +1,5 @@
+Python 3.8 compatibility update
+
+app.py अब पहले standard-library zoneinfo import करता है; Python 3.8 में backports.zoneinfo fallback उपयोग करता है। requirements.txt में Python 3.8 के लिए backports.zoneinfo conditional dependency जोड़ी गई है।
+
+पुराना .venv हटाकर RUN_UBUNTU.sh फिर चलाएँ।

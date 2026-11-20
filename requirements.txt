@@ -1,0 +1,6 @@
+streamlit>=1.36,<2
+streamlit-autorefresh>=1.0.1
+requests>=2.31
+
+# Python 3.8 compatibility for datetime.timezone database
+backports.zoneinfo; python_version < "3.9"

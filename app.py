@@ -1252,7 +1252,7 @@ with st.expander("📋 Matched NSE F&O Stocks — Clean View", expanded=False):
     # Keep those identifiers only in the in-memory API universe and downloadable raw CSV.
     clean_ranked = ranked.copy()
     if "DIRECTION" in clean_ranked.columns:
-        clean_ranked["Direction"] = clean_ranked["DIRECTION"].map({"UP":"("<div style='font-size:1.35rem;font-weight:750;color:#198754;margin:0 0 .45rem 0;'>▲", "DOWN":"🔻"}).fillna("⚪ FLAT")
+        clean_ranked["Direction"] = clean_ranked["DIRECTION"].map({"UP":'style='font-size:1.35rem;font-weight:750;color:#198754;margin:0 0 .45rem 0;' ▲", "DOWN":"🔻"}).fillna("⚪ FLAT")
     elif "DAY_%" in clean_ranked.columns:
         day = pd.to_numeric(clean_ranked["DAY_%"], errors="coerce").fillna(0)
         clean_ranked["Direction"] = day.map(lambda x: "▲" if x > 0.001 else ("🔻 DOWN" if x < -0.001 else "⚪ FLAT"))

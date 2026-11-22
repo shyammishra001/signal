@@ -45,25 +45,34 @@ if app_password:
                 st.error("Password गलत है।")
         st.stop()
 
-# Browser-local token vault: keeps the INDstocks token on this browser for 24h.
-# Token is not written into app.py, GitHub, CSV, or Streamlit server files.
+# Browser-local token vault: stores the INDstocks token in this browser for 24h.
+# The token is kept in browser storage, never written to the repository or server files.
 import streamlit.components.v1 as components
+
 token_vault = components.declare_component(
     "shyam_ai_token_vault",
     path=os.path.join(os.path.dirname(__file__), "token_vault")
 )
+
+# IMPORTANT: Do not set a fixed `key` here. Without a fixed key, Streamlit
+# re-renders the component when save_token / clear_token arguments change.
 vault_result = token_vault(
     save_token=st.session_state.get("_token_to_save", ""),
     clear_token=bool(st.session_state.get("_clear_saved_token", False)),
-    default={"token": "", "expires_at": 0},
-    key="shyam_ai_token_vault_component"
+    default={"token": "", "expires_at": 0, "storage": "none"}
 )
+
+# Consume one-shot commands only after the component has received the arguments.
 st.session_state.pop("_token_to_save", None)
 st.session_state.pop("_clear_saved_token", None)
+
 if not isinstance(vault_result, dict):
-    vault_result = {"token": "", "expires_at": 0}
+    vault_result = {"token": "", "expires_at": 0, "storage": "none"}
 saved_token = str(vault_result.get("token") or "")
-expires_at = float(vault_result.get("expires_at") or 0)
+try:
+    expires_at = float(vault_result.get("expires_at") or 0)
+except (TypeError, ValueError):
+    expires_at = 0
 if expires_at and time.time() >= expires_at:
     saved_token = ""
 
@@ -100,9 +109,10 @@ with st.sidebar:
     st.divider()
     st.caption("पहली बार 1m/3m/5m history collect होगी। 5 मिनट बाद पूरे momentum windows उपलब्ध होंगे।")
 
-# A newly typed token is used immediately only after the explicit Save 24h action.
+# Use the restored browser token; during first-time entry, use the typed value
+# so the user can connect immediately after pressing Save 24h.
 token = saved_token
-if not token.strip() and entered_token if "entered_token" in locals() else False:
+if not token.strip() and "entered_token" in locals():
     token = entered_token.strip()
 if token.strip() and not show_api_settings:
     st.markdown("<style>section[data-testid='stSidebar']{display:none!important;}div[data-testid='stSidebarNav']{display:none!important;}section.main>div{max-width:100%!important;}</style>", unsafe_allow_html=True)

@@ -45,29 +45,26 @@ if app_password:
                 st.error("Password गलत है।")
         st.stop()
 
-# Browser-local token vault: stores the INDstocks token in this browser for 24h.
-# The token is kept in browser storage, never written to the repository or server files.
+# Browser-local token vault. Keep a stable component key and wait for an ACK
+# before clearing a save/clear command from session state.
 import streamlit.components.v1 as components
+import uuid
 
 token_vault = components.declare_component(
     "shyam_ai_token_vault",
     path=os.path.join(os.path.dirname(__file__), "token_vault")
 )
-
-# IMPORTANT: Do not set a fixed `key` here. Without a fixed key, Streamlit
-# re-renders the component when save_token / clear_token arguments change.
+_vault_command = st.session_state.get("_vault_command", {})
 vault_result = token_vault(
-    save_token=st.session_state.get("_token_to_save", ""),
-    clear_token=bool(st.session_state.get("_clear_saved_token", False)),
-    default={"token": "", "expires_at": 0, "storage": "none"}
+    command=_vault_command,
+    default={"token": "", "expires_at": 0, "status": "loading", "storage": "none"},
+    key="shyam_ai_token_vault_component"
 )
-
-# Consume one-shot commands only after the component has received the arguments.
-st.session_state.pop("_token_to_save", None)
-st.session_state.pop("_clear_saved_token", None)
-
 if not isinstance(vault_result, dict):
-    vault_result = {"token": "", "expires_at": 0, "storage": "none"}
+    vault_result = {"token": "", "expires_at": 0, "status": "loading", "storage": "none"}
+# Acknowledge only the exact command that the browser reports as completed.
+if _vault_command and vault_result.get("request_id") == _vault_command.get("request_id"):
+    st.session_state.pop("_vault_command", None)
 saved_token = str(vault_result.get("token") or "")
 try:
     expires_at = float(vault_result.get("expires_at") or 0)
@@ -93,13 +90,18 @@ with st.sidebar:
     with save_col:
         if st.button("💾 Save 24h", use_container_width=True):
             if entered_token.strip():
-                st.session_state["_token_to_save"] = entered_token.strip()
+                st.session_state["_vault_command"] = {
+                    "action": "save", "token": entered_token.strip(),
+                    "request_id": uuid.uuid4().hex
+                }
                 st.rerun()
             else:
                 st.warning("पहले Access Token डालें।")
     with clear_col:
         if st.button("🧹 Clear", use_container_width=True):
-            st.session_state["_clear_saved_token"] = True
+            st.session_state["_vault_command"] = {
+                "action": "clear", "request_id": uuid.uuid4().hex
+            }
             st.session_state["api_token_input"] = ""
             st.rerun()
     st.divider()
@@ -114,6 +116,12 @@ with st.sidebar:
 token = saved_token
 if not token.strip() and "entered_token" in locals():
     token = entered_token.strip()
+if vault_result.get("status") == "error":
+    st.error("Browser में Token सेव नहीं हुआ: " + str(vault_result.get("message") or "Browser storage उपलब्ध नहीं है।"))
+elif vault_result.get("status") == "saved":
+    st.success("Token browser में सेव हो गया है (24 घंटे)।")
+elif vault_result.get("status") == "cleared":
+    st.info("Saved token हटा दिया गया है।")
 if token.strip() and not show_api_settings:
     st.markdown("<style>section[data-testid='stSidebar']{display:none!important;}div[data-testid='stSidebarNav']{display:none!important;}section.main>div{max-width:100%!important;}</style>", unsafe_allow_html=True)
 if token.strip() and not show_api_settings:
